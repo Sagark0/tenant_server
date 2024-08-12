@@ -1,0 +1,47 @@
+# Node modules
+node_modules/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment variables
+.env
+
+# Output of build tools
+dist/
+build/
+tmp/
+temp/
+out/
+coverage/
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Editor-specific files
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+*.bak
+
+# Package-lock or yarn.lock (if not used)
+# Uncomment one of these if you don't want to commit the lockfile
+package-lock.json
+# yarn.lock
+
+# Miscellaneous
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Optional: Ignore specific files/folders related to deployment or local testing
+# .vercel/
+# .railway/
+# .render/
