@@ -39,62 +39,85 @@ router.get("/", async (req, res) => {
 // POST a new tenant
 router.post("/", async (req, res) => {
   const { tenant_name, move_in_date, document_type, document_no, phone_no, room_id } = req.body;
-  console.log(tenant_name);
   const fields = [];
   const values = [];
   const placeholders = [];
+
   fields.push("tenant_name");
   values.push(tenant_name);
   placeholders.push(`$${values.length}`);
+
   fields.push("room_id");
   values.push(room_id);
   placeholders.push(`$${values.length}`);
+
   if (document_type !== undefined) {
     fields.push("document_type");
     values.push(document_type);
     placeholders.push(`$${values.length}`);
   }
+
   if (document_no !== undefined) {
     fields.push("document_no");
     values.push(String(document_no));
     placeholders.push(`$${values.length}`);
   }
+
   if (phone_no !== undefined) {
     fields.push("phone_no");
     values.push(String(phone_no));
     placeholders.push(`$${values.length}`);
   }
+
   if (move_in_date !== undefined) {
     fields.push("move_in_date");
     values.push(move_in_date);
     placeholders.push(`$${values.length}`);
   }
-  // if (last_due_created_month !== undefined) {
-  //   fields.push("last_due_created_month");
-  //   values.push(last_due_created_month);
-  //   placeholders.push(`$${values.length}`);
-  // }
+
   const query = `
-  INSERT INTO my_schema.tenants (${fields.join(", ")})
-  VALUES (${placeholders.join(", ")})
-  RETURNING *;
-`;
-console.log(query);
+    INSERT INTO my_schema.tenants (${fields.join(", ")})
+    VALUES (${placeholders.join(", ")})
+    RETURNING *;
+  `;
+  console.log(query);
+
   try {
     client = await pool.connect();
     await client.query("BEGIN");
+
+    // Insert the tenant into the tenants table
     const result = await client.query(query, values);
-    const occupied_in_room_result = await client.query(`select seat_occupied from ${schema}.rooms where room_id = $1`, [room_id]);
+
+    // Get the current seat_occupied value
+    const occupied_in_room_result = await client.query(`SELECT seat_occupied FROM ${schema}.rooms WHERE room_id = $1`, [room_id]);
     const occupied_in_room = occupied_in_room_result.rows[0].seat_occupied;
-    await client.query(`UPDATE ${schema}.rooms SET seat_occupied = $1 where room_id = $2`, [occupied_in_room + 1, room_id]);
+
+    // Update seat_occupied and possibly last_due_created_month and move_in_date
+    if (occupied_in_room === 0) {
+      await client.query(`
+        UPDATE ${schema}.rooms 
+        SET seat_occupied = 1, last_due_created_month = $1, move_in_date = $1 
+        WHERE room_id = $2`, 
+        [move_in_date, room_id]
+      );
+    } else {
+      await client.query(`
+        UPDATE ${schema}.rooms 
+        SET seat_occupied = $1 
+        WHERE room_id = $2`, 
+        [occupied_in_room + 1, room_id]
+      );
+    }
+
     await client.query("COMMIT");
     res.status(201).json(result.rows[0]);
   } catch (err) {
     if (client) await client.query("ROLLBACK");
     console.error("Error executing query", err.stack);
     res.status(500).send("Error executing query");
-  } finally{
-    if(client) client.release();
+  } finally {
+    if (client) client.release();
   }
 });
 
@@ -148,13 +171,39 @@ router.put("/:id", async (req, res) => {
 // DELETE a tenant
 router.delete("/:id", async (req, res) => {
   const { id } = req.params;
+  const { room_id } = req.body;
   try {
-    await pool.query("DELETE FROM my_schema.tenants WHERE tenant_id = $1", [id]);
+    client = await pool.connect();
+    await client.query("BEGIN");
+
+    // Delete the tenant
+    await client.query("DELETE FROM my_schema.tenants WHERE tenant_id = $1", [id]);
+
+    // Get the current seat_occupied value
+    const occupied_in_room_result = await client.query(`SELECT seat_occupied FROM ${schema}.rooms WHERE room_id = $1`, [room_id]);
+    const occupied_in_room = occupied_in_room_result.rows[0].seat_occupied;
+
+    // If seat_occupied is 1, set seat_occupied to 0 and nullify last_due_created_month and move_in_date
+    if (occupied_in_room === 1) {
+      await client.query(
+        `UPDATE ${schema}.rooms SET seat_occupied = 0, last_due_created_month = NULL, move_in_date = NULL WHERE room_id = $1`,
+        [room_id]
+      );
+    } else {
+      // Otherwise, just decrement the seat_occupied
+      await client.query(`UPDATE ${schema}.rooms SET seat_occupied = $1 WHERE room_id = $2`, [occupied_in_room - 1, room_id]);
+    }
+
+    await client.query("COMMIT");
     res.status(204).send();
   } catch (err) {
+    await client.query("ROLLBACK");
     console.error("Error executing query", err.stack);
     res.status(500).send("Error executing query");
+  } finally {
+    client.release();
   }
 });
+
 
 module.exports = router;

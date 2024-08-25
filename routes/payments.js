@@ -22,7 +22,7 @@ router.post("/:room_id", async (req, res) => {
       [room_id]
     );
 
-    let amountPaid = payment_amount;  // amount paid
+    let amountPaid = payment_amount; // amount paid
 
     for (const due of duesResult.rows) {
       if (amountPaid <= 0) break; // Stop if there's no more payment to allocate
@@ -31,7 +31,7 @@ router.post("/:room_id", async (req, res) => {
 
       if (amountPaid < payment_remaining) {
         // Step 2: If payment_amount < due_amount, subtract from due_amount and update the due
-        const remainingAmount = payment_remaining - amountPaid
+        const remainingAmount = payment_remaining - amountPaid;
         await client.query(
           `UPDATE ${schema}.dues SET payment_remaining = $1, status = 'Partially Paid' WHERE due_id = $2`,
           [remainingAmount, due_id]
@@ -39,7 +39,10 @@ router.post("/:room_id", async (req, res) => {
         amountPaid = 0; // All payment has been allocated
       } else {
         // Step 4: If payment_amount > due_amount, mark the due as paid and continue to the next one
-        await client.query(`UPDATE ${schema}.dues SET payment_remaining = 0, status = 'Paid' WHERE due_id = $1`, [due_id]);
+        await client.query(
+          `UPDATE ${schema}.dues SET payment_remaining = 0, status = 'Paid' WHERE due_id = $1`,
+          [due_id]
+        );
         amountPaid -= due_amount;
       }
     }
@@ -76,7 +79,25 @@ router.post("/:room_id", async (req, res) => {
 router.get("/dues/:id", async (req, res) => {
   const { id } = req.params;
   try {
-    const result = await pool.query(`SELECT * from ${schema}.dues where room_id = $1 ORDER BY due_date DESC`, [id]);
+    const result = await pool.query(
+      `SELECT * from ${schema}.dues where room_id = $1 ORDER BY due_date DESC`,
+      [id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error("Error executing query", err.stack);
+    res.status(500).send("Error executing query");
+  }
+});
+
+router.get("/dues", async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT p.property_name, r.room_no, d.*
+      from ${schema}.dues d join ${schema}.rooms r on d.room_id = r.room_id  
+      join ${schema}.properties p on r.property_id = p.property_id 
+      WHERE d.status IN ('Pending', 'Partially Paid') ORDER BY d.due_date DESC`
+    );
     res.json(result.rows);
   } catch (err) {
     console.error("Error executing query", err.stack);
@@ -101,8 +122,8 @@ router.get("/generateDues", async (req, res) => {
     for (const room of rooms) {
       const { room_id, last_due_created_month, available_balance, room_rent, seat_occupied } = room;
 
-      if ( seat_occupied == 0 ) continue;
-      
+      if (seat_occupied == 0) continue;
+
       // Calculate the next due creation date by adding 20 days to the last_due_created_month
       const nextDueCreatedDate = moment(last_due_created_month).add(20, "days");
 
@@ -163,6 +184,5 @@ router.get("/generateDues", async (req, res) => {
     if (client) client.release();
   }
 });
-
 
 module.exports = router;
