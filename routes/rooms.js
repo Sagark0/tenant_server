@@ -18,12 +18,12 @@ router.get('/', async (req, res) => {
 
 // POST a new room
 router.post('/', async (req, res) => {
-  const { property_id, room_no, room_capacity} = req.body;
+  const { property_id, room_no, room_rent, room_capacity} = req.body;
   console.log("room details", req.body)
   try {
     const result = await pool.query(
-      'INSERT INTO my_schema.rooms (property_id, room_no, room_capacity) VALUES ($1, $2, $3) RETURNING *',
-      [property_id, room_no, room_capacity]
+      'INSERT INTO my_schema.rooms (property_id, room_no, room_rent, room_capacity) VALUES ($1, $2, $3, $4) RETURNING *',
+      [property_id, room_no, room_rent, room_capacity]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
@@ -35,11 +35,11 @@ router.post('/', async (req, res) => {
 // UPDATE a room
 router.put('/:id', async (req, res) => {
   const { id } = req.params;
-  const { property_id, room_no, room_capacity, seat_occupied } = req.body;
+  const { property_id, room_no, room_rent, room_capacity} = req.body;
   try {
     const result = await pool.query(
-      'UPDATE my_schema.rooms SET property_id = $1, room_no = $2, room_capacity = $3, seat_occupied = $4 WHERE room_id = $5 RETURNING *',
-      [property_id, room_no, room_capacity, seat_occupied, id]
+      'UPDATE my_schema.rooms SET property_id = $1, room_no = $2, room_capacity = $3, room_rent = $4 WHERE room_id = $5 RETURNING *',
+      [property_id, room_no, room_capacity, room_rent, id]
     );
     res.json(result.rows[0]);
   } catch (err) {

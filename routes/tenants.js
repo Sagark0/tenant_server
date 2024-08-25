@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const { getDBPool } = require("../utility/database");
+const { schema } = require("../utility/constants");
 require("dotenv").config();
 
 const pool = getDBPool();
@@ -37,13 +38,16 @@ router.get("/", async (req, res) => {
 
 // POST a new tenant
 router.post("/", async (req, res) => {
-  const { tenant_name, move_in_date, last_due_created_month, document_type, document_no, phone_no } = req.body;
+  const { tenant_name, move_in_date, document_type, document_no, phone_no, room_id } = req.body;
   console.log(tenant_name);
   const fields = [];
   const values = [];
   const placeholders = [];
   fields.push("tenant_name");
   values.push(tenant_name);
+  placeholders.push(`$${values.length}`);
+  fields.push("room_id");
+  values.push(room_id);
   placeholders.push(`$${values.length}`);
   if (document_type !== undefined) {
     fields.push("document_type");
@@ -52,12 +56,12 @@ router.post("/", async (req, res) => {
   }
   if (document_no !== undefined) {
     fields.push("document_no");
-    values.push(document_no);
+    values.push(String(document_no));
     placeholders.push(`$${values.length}`);
   }
   if (phone_no !== undefined) {
     fields.push("phone_no");
-    values.push(phone_no);
+    values.push(String(phone_no));
     placeholders.push(`$${values.length}`);
   }
   if (move_in_date !== undefined) {
@@ -65,11 +69,11 @@ router.post("/", async (req, res) => {
     values.push(move_in_date);
     placeholders.push(`$${values.length}`);
   }
-  if (last_due_created_month !== undefined) {
-    fields.push("last_due_created_month");
-    values.push(last_due_created_month);
-    placeholders.push(`$${values.length}`);
-  }
+  // if (last_due_created_month !== undefined) {
+  //   fields.push("last_due_created_month");
+  //   values.push(last_due_created_month);
+  //   placeholders.push(`$${values.length}`);
+  // }
   const query = `
   INSERT INTO my_schema.tenants (${fields.join(", ")})
   VALUES (${placeholders.join(", ")})
@@ -77,11 +81,20 @@ router.post("/", async (req, res) => {
 `;
 console.log(query);
   try {
-    const result = await pool.query(query, values);
+    client = await pool.connect();
+    await client.query("BEGIN");
+    const result = await client.query(query, values);
+    const occupied_in_room_result = await client.query(`select seat_occupied from ${schema}.rooms where room_id = $1`, [room_id]);
+    const occupied_in_room = occupied_in_room_result.rows[0].seat_occupied;
+    await client.query(`UPDATE ${schema}.rooms SET seat_occupied = $1 where room_id = $2`, [occupied_in_room + 1, room_id]);
+    await client.query("COMMIT");
     res.status(201).json(result.rows[0]);
   } catch (err) {
+    if (client) await client.query("ROLLBACK");
     console.error("Error executing query", err.stack);
     res.status(500).send("Error executing query");
+  } finally{
+    if(client) client.release();
   }
 });
 
