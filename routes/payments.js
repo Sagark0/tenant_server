@@ -7,8 +7,9 @@ const pool = getDBPool();
 
 // manage add payment
 router.post("/:room_id", async (req, res) => {
-  const { payment_amount } = req.body;
+  const { payment_amount, new_electricity_reading, prev_electricity_reading, electricity_rate } = req.body;
   const { room_id } = req.params;
+  console.log(req.body);
   let client;
   try {
     client = await pool.connect();
@@ -47,6 +48,34 @@ router.post("/:room_id", async (req, res) => {
       }
     }
 
+    if ( amountPaid > 0 && new_electricity_reading && new_electricity_reading > prev_electricity_reading ){
+      const new_electricity_due = (parseFloat(new_electricity_reading) - parseFloat(prev_electricity_reading)) * electricity_rate;
+      var status;
+      console.log({'new due': new_electricity_due})
+      var electricity_remaining_amount;
+      if (amountPaid < new_electricity_due) {
+        status = "Partially Paid";
+        electricity_remaining_amount = new_electricity_due - amountPaid;
+        amountPaid = 0;
+      } else {
+        status = "Paid";
+        electricity_remaining_amount = 0;
+        amountPaid = amountPaid - new_electricity_due;
+      }
+      await client.query(
+        `INSERT INTO ${schema}.dues (room_id, due_date, due_amount, payment_remaining, status) VALUES ($1, NOW(), $2, $3, $4) RETURNING *`,
+        [
+          room_id,
+          new_electricity_due,
+          electricity_remaining_amount,  
+          status             
+        ]
+      );
+      await client.query(
+        `UPDATE ${schema}.rooms SET electricity_reading = $1 WHERE room_id = $2`,
+        [new_electricity_reading, room_id]
+      );
+    }
     // Step 5: If there's any remaining payment, add it to the room's available balance
     if (amountPaid > 0) {
       await client.query(

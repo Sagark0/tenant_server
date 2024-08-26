@@ -35,11 +35,11 @@ router.post('/', async (req, res) => {
 // UPDATE a room
 router.put('/:id', async (req, res) => {
   const { id } = req.params;
-  const { property_id, room_no, room_rent, room_capacity} = req.body;
+  const { property_id, room_no, room_rent, room_capacity, electricity_reading, security_deposit } = req.body;
   try {
     const result = await pool.query(
-      'UPDATE my_schema.rooms SET property_id = $1, room_no = $2, room_capacity = $3, room_rent = $4 WHERE room_id = $5 RETURNING *',
-      [property_id, room_no, room_capacity, room_rent, id]
+      'UPDATE my_schema.rooms SET property_id = $1, room_no = $2, room_capacity = $3, room_rent = $4, electricity_reading = $5, security_deposit = $6 WHERE room_id = $7 RETURNING *',
+      [property_id, room_no, room_capacity, room_rent, electricity_reading, security_deposit, id]
     );
     res.json(result.rows[0]);
   } catch (err) {
