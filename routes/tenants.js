@@ -38,7 +38,7 @@ router.get("/", async (req, res) => {
 
 // POST a new tenant
 router.post("/", async (req, res) => {
-  const { tenant_name, move_in_date, document_type, document_no, phone_no, room_id } = req.body;
+  const { tenant_name, move_in_date, document_type, document_no, phone_no, room_id, document_file_path } = req.body;
   const fields = [];
   const values = [];
   const placeholders = [];
@@ -60,6 +60,11 @@ router.post("/", async (req, res) => {
   if (document_no !== undefined) {
     fields.push("document_no");
     values.push(String(document_no));
+    placeholders.push(`$${values.length}`);
+  }
+  if (document_file_path && document_file_path.fileName) {
+    fields.push("document_file_path");
+    values.push(String(document_file_path.fileName));
     placeholders.push(`$${values.length}`);
   }
 
@@ -154,12 +159,12 @@ router.patch('/:tenant_id', async (req, res) => {
 // UPDATE a tenant
 router.put("/:id", async (req, res) => {
   const { id } = req.params;
-  const { tenant_name, room_id, document_type, document_no, phone_no, available_balance, last_due_created_month } =
+  const { tenant_name, room_id, document_type, document_no, phone_no, available_balance, last_due_created_month, document_file_path } =
     req.body;
   try {
     const result = await pool.query(
-      "UPDATE my_schema.tenants SET tenant_name = $1, room_id = $2, document_type = $3, document_no = $4, phone_no = $5, available_balance = $6, last_due_created_month = $7  WHERE tenant_id = $8 RETURNING *",
-      [tenant_name, room_id, document_type, document_no, phone_no, available_balance, last_due_created_month, id]
+      "UPDATE my_schema.tenants SET tenant_name = $1, room_id = $2, document_type = $3, document_no = $4, phone_no = $5, available_balance = $6, last_due_created_month = $7, document_file_path = $8  WHERE tenant_id = $9 RETURNING *",
+      [tenant_name, room_id, document_type, document_no, phone_no, available_balance, last_due_created_month, document_file_path.fileName, id]
     );
     res.json(result.rows[0]);
   } catch (err) {

@@ -7,7 +7,8 @@ const pool = getDBPool();
 
 // manage add payment
 router.post("/:room_id", async (req, res) => {
-  const { payment_amount, new_electricity_reading, prev_electricity_reading, electricity_rate } = req.body;
+  const { payment_amount, new_electricity_reading, prev_electricity_reading, electricity_rate } =
+    req.body;
   const { room_id } = req.params;
   console.log(req.body);
   let client;
@@ -48,10 +49,16 @@ router.post("/:room_id", async (req, res) => {
       }
     }
 
-    if ( amountPaid > 0 && new_electricity_reading && new_electricity_reading > prev_electricity_reading ){
-      const new_electricity_due = (parseFloat(new_electricity_reading) - parseFloat(prev_electricity_reading)) * electricity_rate;
+    if (
+      amountPaid > 0 &&
+      new_electricity_reading &&
+      new_electricity_reading > prev_electricity_reading
+    ) {
+      const new_electricity_due =
+        (parseFloat(new_electricity_reading) - parseFloat(prev_electricity_reading)) *
+        electricity_rate;
       var status;
-      console.log({'new due': new_electricity_due})
+      console.log({ "new due": new_electricity_due });
       var electricity_remaining_amount;
       if (amountPaid < new_electricity_due) {
         status = "Partially Paid";
@@ -64,17 +71,12 @@ router.post("/:room_id", async (req, res) => {
       }
       await client.query(
         `INSERT INTO ${schema}.dues (room_id, due_date, due_amount, payment_remaining, status) VALUES ($1, NOW(), $2, $3, $4) RETURNING *`,
-        [
-          room_id,
-          new_electricity_due,
-          electricity_remaining_amount,  
-          status             
-        ]
+        [room_id, new_electricity_due, electricity_remaining_amount, status]
       );
-      await client.query(
-        `UPDATE ${schema}.rooms SET electricity_reading = $1 WHERE room_id = $2`,
-        [new_electricity_reading, room_id]
-      );
+      await client.query(`UPDATE ${schema}.rooms SET electricity_reading = $1 WHERE room_id = $2`, [
+        new_electricity_reading,
+        room_id,
+      ]);
     }
     // Step 5: If there's any remaining payment, add it to the room's available balance
     if (amountPaid > 0) {
@@ -138,60 +140,51 @@ router.get("/generateDues", async (req, res) => {
   let client;
   try {
     client = await pool.connect();
-
-    // Start a transaction
     await client.query("BEGIN");
 
     const roomsResult = await client.query(
-      `SELECT room_id, last_due_created_month, available_balance, room_rent, seat_occupied FROM ${schema}.rooms`
+      `SELECT room_id, last_due_created_month, available_balance, room_rent FROM ${schema}.rooms where seat_occupied != 0`
     );
     const rooms = roomsResult.rows;
     const today = moment().startOf("day");
     console.log("Called Generate Due");
-    for (const room of rooms) {
-      const { room_id, last_due_created_month, available_balance, room_rent, seat_occupied } = room;
 
-      if (seat_occupied == 0) continue;
+    for (const room of rooms) {
+      const { room_id, last_due_created_month, available_balance, room_rent } = room;
 
       // Calculate the next due creation date by adding 20 days to the last_due_created_month
-      const nextDueCreatedDate = moment(last_due_created_month).add(20, "days");
-
+      var nextDueCreatedDate = moment(last_due_created_month).add(20, "days");
+      var new_available_balance = available_balance;
+      var new_last_due_created_month = last_due_created_month;
       // Check if the next due creation date is less than today
       if (nextDueCreatedDate.isBefore(today)) {
-        const dueDate = moment(last_due_created_month).add(1, "month"); // Next month of last_due_created_month
-        let dueAmount = room_rent; // Amount to be paid
-        let dueStatus = "Pending";
-        let paymentRemaining = dueAmount;
+        while (nextDueCreatedDate.isBefore(today)) {
+          var dueDate = moment(new_last_due_created_month).add(1, "month"); // Next month of last_due_created_month
+          let dueStatus = "Pending";
+          let paymentRemaining = room_rent;
 
-        // Apply the conditions based on available balance
-        if (available_balance > dueAmount) {
-          // Case 1: available_balance > due_amount
+          if (new_available_balance > room_rent) {
+            new_available_balance = new_available_balance - room_rent;
+            dueStatus = "Paid";
+            paymentRemaining = 0;
+          } else if (new_available_balance > 0 && new_available_balance < room_rent) {
+            new_available_balance = 0;
+            dueStatus = "Partially Paid";
+            paymentRemaining = room_rent - new_available_balance;
+          }
+
+          // Insert the due record in the dues table with the formatted date
           await client.query(
-            `UPDATE ${schema}.rooms SET available_balance = available_balance - $1 WHERE room_id = $2`,
-            [dueAmount, room_id]
+            `INSERT INTO ${schema}.dues (room_id, due_amount, due_date, status, payment_remaining) VALUES ($1, $2, $3, $4, $5)`,
+            [room_id, room_rent, dueDate.format("DD-MM-YYYY"), dueStatus, paymentRemaining]
           );
-          dueStatus = "Paid";
-          paymentRemaining = 0;
-        } else if (available_balance > 0 && available_balance < dueAmount) {
-          // Case 3: available_balance < due_amount
-          await client.query(
-            `UPDATE ${schema}.rooms SET available_balance = 0 WHERE room_id = $1`,
-            [room_id]
-          );
-          dueStatus = "Partially Paid";
-          paymentRemaining = dueAmount - available_balance;
+          new_last_due_created_month = dueDate;
+          nextDueCreatedDate = moment(new_last_due_created_month).add(20, "days");
         }
-
-        // Insert the due record in the dues table with the formatted date
-        await client.query(
-          `INSERT INTO ${schema}.dues (room_id, due_amount, due_date, status, payment_remaining) VALUES ($1, $2, $3, $4, $5)`,
-          [room_id, dueAmount, dueDate.format("DD-MM-YYYY"), dueStatus, paymentRemaining]
-        );
-
         // Update the room's last_due_created_month with the formatted date
         await client.query(
-          `UPDATE ${schema}.rooms SET last_due_created_month = $1 WHERE room_id = $2`,
-          [dueDate.format("YYYY-MM-DD"), room_id]
+          `UPDATE ${schema}.rooms SET last_due_created_month = $1, available_balance = $2 WHERE room_id = $3`,
+          [dueDate.format("YYYY-MM-DD"), new_available_balance, room_id]
         );
 
         console.log(
@@ -200,12 +193,9 @@ router.get("/generateDues", async (req, res) => {
       }
     }
 
-    // Commit the transaction
     await client.query("COMMIT");
-
-    res.status(204).send(); // No content response
+    res.status(204).send();
   } catch (err) {
-    // If there's an error, rollback the transaction
     if (client) await client.query("ROLLBACK");
     console.error("Error executing query", err.stack);
     res.status(500).send("Error executing query");
