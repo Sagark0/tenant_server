@@ -9,6 +9,10 @@ const port = 3000;
 app.use(cors());
 app.use(express.json());
 
+app.get('/', (req, res) => {
+  res.send("OK");
+})
+
 // Import routes
 const propertyRoutes = require('./routes/properties');
 const roomRoutes = require('./routes/rooms');

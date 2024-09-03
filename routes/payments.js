@@ -14,43 +14,48 @@ router.post("/:room_id", async (req, res) => {
   let client;
   try {
     client = await pool.connect();
-
-    // Start a transaction
     await client.query("BEGIN");
 
-    // Step 1: Fetch all pending dues for the room, ordered by due_date in reverse (latest first)
+    // Step 1: Fetch all pending dues for the room, ordered by due_date
     const duesResult = await client.query(
-      `SELECT * FROM ${schema}.dues WHERE room_id = $1 AND (status = 'Pending' OR status = 'Partially Paid') ORDER BY due_date DESC`,
+      `SELECT * FROM ${schema}.dues WHERE room_id = $1 AND (status = 'Pending' OR status = 'Partially Paid') ORDER BY due_date`,
       [room_id]
     );
 
-    let amountPaid = payment_amount; // amount paid
+    let amountPaid = parseFloat(payment_amount);
 
     for (const due of duesResult.rows) {
       if (amountPaid <= 0) break; // Stop if there's no more payment to allocate
-
       const { due_id, due_amount, payment_remaining } = due;
-
+      let status = "Paid";
+      var remainingAmount;
       if (amountPaid < payment_remaining) {
-        // Step 2: If payment_amount < due_amount, subtract from due_amount and update the due
-        const remainingAmount = payment_remaining - amountPaid;
-        await client.query(
-          `UPDATE ${schema}.dues SET payment_remaining = $1, status = 'Partially Paid' WHERE due_id = $2`,
-          [remainingAmount, due_id]
-        );
+        // If payment_amount < due_amount, subtract from due_amount and update the due
+        remainingAmount = payment_remaining - amountPaid;
+        status = "Partially Paid";
+        // await client.query(
+        //   `UPDATE ${schema}.dues SET payment_remaining = $1, status = 'Partially Paid' WHERE due_id = $2`,
+        //   [remainingAmount, due_id]
+        // );
         amountPaid = 0; // All payment has been allocated
       } else {
         // Step 4: If payment_amount > due_amount, mark the due as paid and continue to the next one
-        await client.query(
-          `UPDATE ${schema}.dues SET payment_remaining = 0, status = 'Paid' WHERE due_id = $1`,
-          [due_id]
-        );
+        // await client.query(
+        //   `UPDATE ${schema}.dues SET payment_remaining = 0, status = 'Paid' WHERE due_id = $1`,
+        //   [due_id]
+        // );
+        remainingAmount = 0;
         amountPaid -= due_amount;
       }
+      console.log("Payment", {remainingAmount, status, due_id})
+      await client.query(
+        `UPDATE ${schema}.dues SET payment_remaining = $1, status = $2 WHERE due_id = $3`,
+        [remainingAmount, status, due_id]
+      );
     }
 
     if (
-      amountPaid > 0 &&
+      prev_electricity_reading &&
       new_electricity_reading &&
       new_electricity_reading > prev_electricity_reading
     ) {
@@ -60,7 +65,11 @@ router.post("/:room_id", async (req, res) => {
       var status;
       console.log({ "new due": new_electricity_due });
       var electricity_remaining_amount;
-      if (amountPaid < new_electricity_due) {
+      if ( amountPaid == 0 ) {
+        status = "Pending";
+        electricity_remaining_amount = new_electricity_due;
+      }
+      else if (amountPaid < new_electricity_due) {
         status = "Partially Paid";
         electricity_remaining_amount = new_electricity_due - amountPaid;
         amountPaid = 0;
@@ -92,12 +101,9 @@ router.post("/:room_id", async (req, res) => {
       [payment_amount, room_id]
     );
 
-    // Commit the transaction
     await client.query("COMMIT");
-
     res.status(201).json(paymentResult.rows);
   } catch (err) {
-    // If there's an error, rollback the transaction
     if (client) await client.query("ROLLBACK");
     console.error("Error executing query", err.stack);
     res.status(500).send("Error executing query");
@@ -138,6 +144,7 @@ router.get("/dues", async (req, res) => {
 
 router.get("/generateDues", async (req, res) => {
   let client;
+  let duesCreatedCount = 0;
   try {
     client = await pool.connect();
     await client.query("BEGIN");
@@ -178,6 +185,7 @@ router.get("/generateDues", async (req, res) => {
             `INSERT INTO ${schema}.dues (room_id, due_amount, due_date, status, payment_remaining) VALUES ($1, $2, $3, $4, $5)`,
             [room_id, room_rent, dueDate.format("DD-MM-YYYY"), dueStatus, paymentRemaining]
           );
+          duesCreatedCount++;
           new_last_due_created_month = dueDate;
           nextDueCreatedDate = moment(new_last_due_created_month).add(20, "days");
         }
@@ -194,7 +202,7 @@ router.get("/generateDues", async (req, res) => {
     }
 
     await client.query("COMMIT");
-    res.status(204).send();
+    res.status(200).json({ message: "Dues generated successfully", duesCreated: duesCreatedCount });
   } catch (err) {
     if (client) await client.query("ROLLBACK");
     console.error("Error executing query", err.stack);
