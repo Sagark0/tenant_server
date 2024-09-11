@@ -29,14 +29,17 @@ router.post("/", async (req, res) => {
     let values = [property_id, room_no, room_rent, room_capacity];
     let placeholders = ["$1", "$2", "$3", "$4"];
 
-    if (electricity_reading !== undefined) {
+    if (electricity_reading !== undefined && electricity_reading!=='' ) {
       query += ", electricity_reading";
       placeholders.push(`$${values.length + 1}`);
       values.push(electricity_reading);
+    } else {
+      query += ", electricity_reading";
+      placeholders.push(`$${values.length + 1}`);
+      values.push(0);
     }
 
     query += `) VALUES (${placeholders.join(", ")}) RETURNING *`;
-
     const result = await pool.query(query, values);
     res.status(201).json(result.rows[0]);
   } catch (err) {
