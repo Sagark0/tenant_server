@@ -183,7 +183,7 @@ router.get("/generateDues", async (req, res) => {
           // Insert the due record in the dues table with the formatted date
           await client.query(
             `INSERT INTO ${schema}.dues (room_id, due_amount, due_date, status, payment_remaining) VALUES ($1, $2, $3, $4, $5)`,
-            [room_id, room_rent, dueDate.format("DD-MM-YYYY"), dueStatus, paymentRemaining]
+            [room_id, room_rent, dueDate.format("YYYY-MM-DD"), dueStatus, paymentRemaining]
           );
           duesCreatedCount++;
           new_last_due_created_month = dueDate;
