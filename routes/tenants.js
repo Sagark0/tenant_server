@@ -19,11 +19,13 @@ router.get("/", async (req, res) => {
     conditionAdded = true;
   }
 
-  if (room_id === 'null' || room_id === null) {
+  if (room_id === "null" || room_id === null) {
     query += conditionAdded ? ` AND room_id IS NULL` : ` WHERE room_id IS NULL`;
   } else if (room_id) {
     params.push(room_id);
-    query += conditionAdded ? ` AND room_id = $${params.length}` : ` WHERE room_id = $${params.length}`;
+    query += conditionAdded
+      ? ` AND room_id = $${params.length}`
+      : ` WHERE room_id = $${params.length}`;
   }
 
   try {
@@ -35,10 +37,10 @@ router.get("/", async (req, res) => {
   }
 });
 
-
 // POST a new tenant
 router.post("/", async (req, res) => {
-  const { tenant_name, move_in_date, document_type, document_no, phone_no, room_id, document_file_path } = req.body;
+  const { tenant_name, move_in_date, document_type, document_no, phone_no, room_id, documents } =
+    req.body;
   const fields = [];
   const values = [];
   const placeholders = [];
@@ -62,9 +64,13 @@ router.post("/", async (req, res) => {
     values.push(String(document_no));
     placeholders.push(`$${values.length}`);
   }
-  if (document_file_path && document_file_path.fileName) {
-    fields.push("document_file_path");
-    values.push(String(document_file_path.fileName));
+  if (documents.length) {
+    fields.push("documents");
+    let documents_arr = [];
+    for (document of documents) {
+      documents_arr.push(document.fileName);
+    }
+    values.push(documents_arr);
     placeholders.push(`$${values.length}`);
   }
 
@@ -95,22 +101,27 @@ router.post("/", async (req, res) => {
     const result = await client.query(query, values);
 
     // Get the current seat_occupied value
-    const occupied_in_room_result = await client.query(`SELECT seat_occupied FROM ${schema}.rooms WHERE room_id = $1`, [room_id]);
+    const occupied_in_room_result = await client.query(
+      `SELECT seat_occupied FROM ${schema}.rooms WHERE room_id = $1`,
+      [room_id]
+    );
     const occupied_in_room = occupied_in_room_result.rows[0].seat_occupied;
 
     // Update seat_occupied and possibly last_due_created_month and move_in_date
     if (occupied_in_room === 0) {
-      await client.query(`
+      await client.query(
+        `
         UPDATE ${schema}.rooms 
         SET seat_occupied = 1, last_due_created_month = $1, move_in_date = $1 
-        WHERE room_id = $2`, 
+        WHERE room_id = $2`,
         [move_in_date, room_id]
       );
     } else {
-      await client.query(`
+      await client.query(
+        `
         UPDATE ${schema}.rooms 
         SET seat_occupied = $1 
-        WHERE room_id = $2`, 
+        WHERE room_id = $2`,
         [occupied_in_room + 1, room_id]
       );
     }
@@ -126,9 +137,8 @@ router.post("/", async (req, res) => {
   }
 });
 
-
 // PATCH method to update tenant's room_id
-router.patch('/:tenant_id', async (req, res) => {
+router.patch("/:tenant_id", async (req, res) => {
   const { tenant_id } = req.params;
   const { room_id } = req.body;
   console.log(tenant_id);
@@ -159,12 +169,36 @@ router.patch('/:tenant_id', async (req, res) => {
 // UPDATE a tenant
 router.put("/:id", async (req, res) => {
   const { id } = req.params;
-  const { tenant_name, room_id, document_type, document_no, phone_no, available_balance, last_due_created_month, document_file_path } =
-    req.body;
+  const {
+    tenant_name,
+    room_id,
+    document_type,
+    document_no,
+    phone_no,
+    available_balance,
+    last_due_created_month,
+    documents,
+  } = req.body;
+  let documents_arr = [];
+  if (documents.length) {
+    for (document of documents) {
+      documents_arr.push(document.fileName);
+    }
+  }
   try {
     const result = await pool.query(
-      "UPDATE my_schema.tenants SET tenant_name = $1, room_id = $2, document_type = $3, document_no = $4, phone_no = $5, available_balance = $6, last_due_created_month = $7, document_file_path = $8  WHERE tenant_id = $9 RETURNING *",
-      [tenant_name, room_id, document_type, document_no, phone_no, available_balance, last_due_created_month, document_file_path.fileName, id]
+      "UPDATE my_schema.tenants SET tenant_name = $1, room_id = $2, document_type = $3, document_no = $4, phone_no = $5, available_balance = $6, last_due_created_month = $7, documents = $8  WHERE tenant_id = $9 RETURNING *",
+      [
+        tenant_name,
+        room_id,
+        document_type,
+        document_no,
+        phone_no,
+        available_balance,
+        last_due_created_month,
+        documents_arr,
+        id,
+      ]
     );
     res.json(result.rows[0]);
   } catch (err) {
@@ -185,7 +219,10 @@ router.delete("/:id", async (req, res) => {
     await client.query("DELETE FROM my_schema.tenants WHERE tenant_id = $1", [id]);
 
     // Get the current seat_occupied value
-    const occupied_in_room_result = await client.query(`SELECT seat_occupied FROM ${schema}.rooms WHERE room_id = $1`, [room_id]);
+    const occupied_in_room_result = await client.query(
+      `SELECT seat_occupied FROM ${schema}.rooms WHERE room_id = $1`,
+      [room_id]
+    );
     const occupied_in_room = occupied_in_room_result.rows[0].seat_occupied;
 
     // If seat_occupied is 1, set seat_occupied to 0 and nullify last_due_created_month and move_in_date
@@ -196,7 +233,10 @@ router.delete("/:id", async (req, res) => {
       );
     } else {
       // Otherwise, just decrement the seat_occupied
-      await client.query(`UPDATE ${schema}.rooms SET seat_occupied = $1 WHERE room_id = $2`, [occupied_in_room - 1, room_id]);
+      await client.query(`UPDATE ${schema}.rooms SET seat_occupied = $1 WHERE room_id = $2`, [
+        occupied_in_room - 1,
+        room_id,
+      ]);
     }
 
     await client.query("COMMIT");
@@ -209,6 +249,5 @@ router.delete("/:id", async (req, res) => {
     client.release();
   }
 });
-
 
 module.exports = router;
