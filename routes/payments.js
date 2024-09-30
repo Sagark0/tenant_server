@@ -1,8 +1,9 @@
 const express = require("express");
 const router = express.Router();
-const { getDBPool } = require("../utility/database");
 const moment = require("moment");
+const { getDBPool } = require("../utility/database");
 const { schema } = require("../utility/constants");
+const { sendBulkPushNotification } = require("../utility/pushNotification");
 const pool = getDBPool();
 
 // manage add payment
@@ -142,6 +143,25 @@ router.get("/dues", async (req, res) => {
   }
 });
 
+router.get("/roomDues", async(req, res) => {
+  const query = `SELECT room_id, min(due_date) as min_due_date from ${schema}.dues where status != 'Paid' group by room_id`
+  try {
+    const result = await pool.query(query);
+    const resultMap = new Map();
+    result.rows.forEach(row => {
+      const today = moment().startOf('day');
+      const min_due_date = moment(row.min_due_date);
+      const color = min_due_date.isBefore(today) ? "red" : "orange";
+      resultMap.set(row.room_id, color);
+    })
+    const resultArray = Array.from(resultMap);
+    res.json(resultArray);
+  } catch(err) {
+    console.error("Error executing query", err.stack);
+    res.status(500).send("Error executing query");
+  }
+})
+
 router.get("/generateDues", async (req, res) => {
   let client;
   let duesCreatedCount = 0;
@@ -200,8 +220,16 @@ router.get("/generateDues", async (req, res) => {
         );
       }
     }
-
+    if(duesCreatedCount) {
+      const result = await client.query(`SELECT expo_push_token from ${schema}.devices`);
+      const pushTokens = result.rows.map(res => res.expo_push_token);
+      const body = `${duesCreatedCount} new ${duesCreatedCount > 1 ? "Dues" : "Due" } created.`;
+      const title = "New Dues Created"
+      await client.query(`INSERT INTO ${schema}.notifications (notification_title, notification_body, notification_type) values($1, $2, $3)`, [title, body, 'dues'])
+      await sendBulkPushNotification(pushTokens, body, title);
+    }
     await client.query("COMMIT");
+
     res.status(200).json({ message: "Dues generated successfully", duesCreated: duesCreatedCount });
   } catch (err) {
     if (client) await client.query("ROLLBACK");

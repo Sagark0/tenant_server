@@ -29,7 +29,7 @@ router.post("/", async (req, res) => {
     let values = [property_id, room_no, room_rent, room_capacity];
     let placeholders = ["$1", "$2", "$3", "$4"];
 
-    if (electricity_reading !== undefined && electricity_reading!=='' ) {
+    if (electricity_reading !== undefined && electricity_reading !== "") {
       query += ", electricity_reading";
       placeholders.push(`$${values.length + 1}`);
       values.push(electricity_reading);
@@ -51,12 +51,28 @@ router.post("/", async (req, res) => {
 // UPDATE a room
 router.put("/:id", async (req, res) => {
   const { id } = req.params;
-  const { property_id, room_no, room_rent, room_capacity, electricity_reading, security_deposit } =
-    req.body;
+  const {
+    property_id,
+    room_no,
+    room_rent,
+    room_capacity,
+    electricity_reading,
+    security_deposit,
+    move_in_date,
+  } = req.body;
   try {
     const result = await pool.query(
-      "UPDATE my_schema.rooms SET property_id = $1, room_no = $2, room_capacity = $3, room_rent = $4, electricity_reading = $5, security_deposit = $6 WHERE room_id = $7 RETURNING *",
-      [property_id, room_no, room_capacity, room_rent, electricity_reading, security_deposit, id]
+      "UPDATE my_schema.rooms SET property_id = $1, room_no = $2, room_capacity = $3, room_rent = $4, electricity_reading = $5, security_deposit = $6, move_in_date = $7 WHERE room_id = $8 RETURNING *",
+      [
+        property_id,
+        room_no,
+        room_capacity,
+        room_rent,
+        electricity_reading,
+        security_deposit,
+        move_in_date,
+        id,
+      ]
     );
     res.json(result.rows[0]);
   } catch (err) {

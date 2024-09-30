@@ -176,6 +176,7 @@ router.put("/:id", async (req, res) => {
     document_no,
     phone_no,
     available_balance,
+    move_in_date,
     last_due_created_month,
     documents,
   } = req.body;
@@ -187,7 +188,7 @@ router.put("/:id", async (req, res) => {
   }
   try {
     const result = await pool.query(
-      "UPDATE my_schema.tenants SET tenant_name = $1, room_id = $2, document_type = $3, document_no = $4, phone_no = $5, available_balance = $6, last_due_created_month = $7, documents = $8  WHERE tenant_id = $9 RETURNING *",
+      "UPDATE my_schema.tenants SET tenant_name = $1, room_id = $2, document_type = $3, document_no = $4, phone_no = $5, available_balance = $6, last_due_created_month = $7, documents = $8, move_in_date = $9  WHERE tenant_id = $10 RETURNING *",
       [
         tenant_name,
         room_id,
@@ -197,6 +198,7 @@ router.put("/:id", async (req, res) => {
         available_balance,
         last_due_created_month,
         documents_arr,
+        move_in_date,
         id,
       ]
     );
