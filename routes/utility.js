@@ -29,13 +29,12 @@ router.get("/clearStorage", async (req, res) => {
 
 router.get("/sendBulkNotifications", async (req, res) => {
   const body = "This is Test Notificaiton";
-  const data = { someData: "This is data" };
   const title = "New Title";
   const query = `SELECT expo_push_token from ${schema}.devices`;
   const result = await pool.query(query);
   console.log(result.rows);
   const pushTokens = result.rows.map((res) => res.expo_push_token);
-  sendBulkPushNotification(pushTokens, body, data, title);
+  sendBulkPushNotification(pushTokens, body, title);
   res.send("Notifications Sent");
 });
 
