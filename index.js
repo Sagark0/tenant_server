@@ -5,6 +5,15 @@ require('dotenv').config();
 const app = express();
 const port = 3000;
 
+var admin = require("firebase-admin");
+
+var serviceAccount = require(process.env.FCM_SERVER_KEY);
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount)
+});
+
+
 // Middleware
 app.use(cors());
 app.use(express.json());

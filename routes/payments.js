@@ -48,7 +48,7 @@ router.post("/:room_id", async (req, res) => {
         remainingAmount = 0;
         amountPaid -= due_amount;
       }
-      console.log("Payment", {remainingAmount, status, due_id})
+      console.log("Payment", { remainingAmount, status, due_id });
       await client.query(
         `UPDATE ${schema}.dues SET payment_remaining = $1, status = $2 WHERE due_id = $3`,
         [remainingAmount, status, due_id]
@@ -66,11 +66,10 @@ router.post("/:room_id", async (req, res) => {
       var status;
       console.log({ "new due": new_electricity_due });
       var electricity_remaining_amount;
-      if ( amountPaid == 0 ) {
+      if (amountPaid == 0) {
         status = "Pending";
         electricity_remaining_amount = new_electricity_due;
-      }
-      else if (amountPaid < new_electricity_due) {
+      } else if (amountPaid < new_electricity_due) {
         status = "Partially Paid";
         electricity_remaining_amount = new_electricity_due - amountPaid;
         amountPaid = 0;
@@ -128,6 +127,7 @@ router.get("/dues/:id", async (req, res) => {
   }
 });
 
+// fetch all dues status IN {Partial, Pending}
 router.get("/dues", async (req, res) => {
   try {
     const result = await pool.query(
@@ -143,24 +143,41 @@ router.get("/dues", async (req, res) => {
   }
 });
 
-router.get("/roomDues", async(req, res) => {
-  const query = `SELECT room_id, min(due_date) as min_due_date from ${schema}.dues where status != 'Paid' group by room_id`
+router.get("/notificationDues/:date", async (req, res) => {
+  const { date } = req.params;
   try {
-    const result = await pool.query(query);
-    const resultMap = new Map();
-    result.rows.forEach(row => {
-      const today = moment().startOf('day');
-      const min_due_date = moment(row.min_due_date);
-      const color = min_due_date.isBefore(today) ? "red" : "orange";
-      resultMap.set(row.room_id, color);
-    })
-    const resultArray = Array.from(resultMap);
-    res.json(resultArray);
-  } catch(err) {
+    const result = await pool.query(
+      `SELECT d.*, p.property_name, r.room_no from ${schema}.dues d 
+      join ${schema}.rooms r on d.room_id = r.room_id 
+      join ${schema}.properties p on r.property_id = p.property_id 
+      where DATE(d.created_at) = $1 ORDER BY due_date DESC`,
+      [date]
+    );
+    res.json(result.rows);
+  } catch (err) {
     console.error("Error executing query", err.stack);
     res.status(500).send("Error executing query");
   }
-})
+});
+
+router.get("/roomDues", async (req, res) => {
+  const query = `SELECT room_id, min(due_date) as min_due_date from ${schema}.dues where status != 'Paid' group by room_id`;
+  try {
+    const result = await pool.query(query);
+    const resultMap = new Map();
+    result.rows.forEach((row) => {
+      const today = moment().startOf("day");
+      const min_due_date = moment(row.min_due_date);
+      const color = min_due_date.isBefore(today) ? "red" : "orange";
+      resultMap.set(row.room_id, color);
+    });
+    const resultArray = Array.from(resultMap);
+    res.json(resultArray);
+  } catch (err) {
+    console.error("Error executing query", err.stack);
+    res.status(500).send("Error executing query");
+  }
+});
 
 router.get("/generateDues", async (req, res) => {
   let client;
@@ -171,7 +188,7 @@ router.get("/generateDues", async (req, res) => {
 
     const roomsResult = await client.query(
       `SELECT room_id, last_due_created_month, available_balance, room_rent FROM ${schema}.rooms where seat_occupied != 0`
-    );
+    ); // Selecting all rooms where seat occupied is not 0
     const rooms = roomsResult.rows;
     const today = moment().startOf("day");
     console.log("Called Generate Due");
@@ -220,13 +237,17 @@ router.get("/generateDues", async (req, res) => {
         );
       }
     }
-    if(duesCreatedCount) {
+    if (duesCreatedCount) {
       const result = await client.query(`SELECT expo_push_token from ${schema}.devices`);
-      const pushTokens = result.rows.map(res => res.expo_push_token);
-      const body = `${duesCreatedCount} new ${duesCreatedCount > 1 ? "Dues" : "Due" } created.`;
-      const title = "New Dues Created"
-      await client.query(`INSERT INTO ${schema}.notifications (notification_title, notification_body, notification_type) values($1, $2, $3)`, [title, body, 'dues'])
-      await sendBulkPushNotification(pushTokens, body, title);
+      const pushTokens = result.rows.map((res) => res.expo_push_token);
+      const body = `${duesCreatedCount} new ${duesCreatedCount > 1 ? "Dues" : "Due"} created.`;
+      const title = "New Dues Created";
+      await client.query(
+        `INSERT INTO ${schema}.notifications (notification_title, notification_body, notification_type) values($1, $2, $3)`,
+        [title, body, "dues"]
+      );
+      const response = await sendBulkPushNotification(pushTokens, body, title);
+      console.log("Notification Respone", response);
     }
     await client.query("COMMIT");
 

@@ -45,3 +45,5 @@ yarn-error.log*
 # .vercel/
 # .railway/
 # .render/
+tenants-2fe0b-firebase-adminsdk-tgwrl-c7f6c3765d.json
+google-services.json

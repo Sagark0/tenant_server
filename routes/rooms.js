@@ -19,6 +19,20 @@ router.get("/", async (req, res) => {
   }
 });
 
+router.get("/room/:id", async(req, res) => {
+  const { id } = req.params;
+  try {
+    const result = await pool.query(
+      "SELECT * FROM my_schema.rooms where room_id=$1 ",
+      [id]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error("Error executing query", err.stack);
+    res.status(500).send("Error executing query");
+  }
+})
+
 // POST a new room
 router.post("/", async (req, res) => {
   const { property_id, room_no, room_rent, room_capacity, electricity_reading } = req.body;
@@ -51,6 +65,7 @@ router.post("/", async (req, res) => {
 // UPDATE a room
 router.put("/:id", async (req, res) => {
   const { id } = req.params;
+  console.log("room", req.body);
   const {
     property_id,
     room_no,
@@ -59,10 +74,12 @@ router.put("/:id", async (req, res) => {
     electricity_reading,
     security_deposit,
     move_in_date,
+    last_due_created_month,
+    available_balance
   } = req.body;
   try {
     const result = await pool.query(
-      "UPDATE my_schema.rooms SET property_id = $1, room_no = $2, room_capacity = $3, room_rent = $4, electricity_reading = $5, security_deposit = $6, move_in_date = $7 WHERE room_id = $8 RETURNING *",
+      "UPDATE my_schema.rooms SET property_id = $1, room_no = $2, room_capacity = $3, room_rent = $4, electricity_reading = $5, security_deposit = $6, move_in_date = $7, last_due_created_month = $8, available_balance = $9 WHERE room_id = $10 RETURNING *",
       [
         property_id,
         room_no,
@@ -71,6 +88,8 @@ router.put("/:id", async (req, res) => {
         electricity_reading,
         security_deposit,
         move_in_date,
+        last_due_created_month,
+        available_balance,
         id,
       ]
     );

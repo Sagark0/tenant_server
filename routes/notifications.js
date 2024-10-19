@@ -5,7 +5,7 @@ const { schema } = require("../utility/constants");
 const pool = getDBPool();
 
 router.get("/", async (req, res) => {
-  const query = `SELECT * FROM ${schema}.notifications`;
+  const query = `SELECT * FROM ${schema}.notifications ORDER BY notification_date_time DESC`;
   try {
     const result = await pool.query(query);
     res.json(result.rows);

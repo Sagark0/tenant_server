@@ -3,7 +3,7 @@ const router = express.Router();
 const { getDBPool } = require("../utility/database");
 const { schema, bucketName } = require("../utility/constants");
 const { supabase } = require("../utility/supabaseClient");
-const { sendPushNotification, sendBulkPushNotification } = require("../utility/pushNotification");
+const { sendBulkPushNotification } = require("../utility/pushNotification");
 require("dotenv").config();
 const pool = getDBPool();
 
@@ -32,15 +32,10 @@ router.get("/sendBulkNotifications", async (req, res) => {
   const title = "New Title";
   const query = `SELECT expo_push_token from ${schema}.devices`;
   const result = await pool.query(query);
-  console.log(result.rows);
   const pushTokens = result.rows.map((res) => res.expo_push_token);
-  sendBulkPushNotification(pushTokens, body, title);
-  res.send("Notifications Sent");
-});
-
-router.get("/sendPushNotification", async (req, res) => {
-  sendPushNotification("ExponentPushToken[4k9udtN7c1NZ7Un5Rreh__]");
-  res.send("Notificaiton Sent");
+  console.log(pushTokens);
+  const response = await sendBulkPushNotification(pushTokens, title, body);
+  res.send(response);
 });
 
 router.post("/addPushToken", async (req, res) => {

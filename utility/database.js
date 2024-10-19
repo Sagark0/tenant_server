@@ -11,6 +11,7 @@ const getDBPool = () => {
       database: process.env.DB_NAME,
       password: process.env.DB_PASSWORD,
       port: process.env.DB_PORT,
+      timezone: 'utc'
     //   ssl: {
     //     rejectUnauthorized: false, // Use this if your database requires SSL, e.g., for Supabase
     //   },
