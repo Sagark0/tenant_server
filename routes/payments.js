@@ -56,9 +56,9 @@ router.post("/:room_id", async (req, res) => {
     }
 
     if (
-      prev_electricity_reading &&
-      new_electricity_reading &&
-      new_electricity_reading > prev_electricity_reading
+      Number(prev_electricity_reading) &&
+      Number(new_electricity_reading) &&
+      Number(new_electricity_reading) > Number(prev_electricity_reading)
     ) {
       const new_electricity_due =
         (parseFloat(new_electricity_reading) - parseFloat(prev_electricity_reading)) *
