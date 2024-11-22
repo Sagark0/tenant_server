@@ -11,7 +11,6 @@ router.post("/:room_id", async (req, res) => {
   const { payment_amount, new_electricity_reading, prev_electricity_reading, electricity_rate } =
     req.body;
   const { room_id } = req.params;
-  console.log(req.body);
   let client;
   try {
     client = await pool.connect();
@@ -48,7 +47,6 @@ router.post("/:room_id", async (req, res) => {
         remainingAmount = 0;
         amountPaid -= due_amount;
       }
-      console.log("Payment", { remainingAmount, status, due_id });
       await client.query(
         `UPDATE ${schema}.dues SET payment_remaining = $1, status = $2 WHERE due_id = $3`,
         [remainingAmount, status, due_id]

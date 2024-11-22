@@ -91,7 +91,6 @@ router.post("/", async (req, res) => {
     VALUES (${placeholders.join(", ")})
     RETURNING *;
   `;
-  console.log(query);
 
   try {
     client = await pool.connect();
@@ -141,7 +140,6 @@ router.post("/", async (req, res) => {
 router.patch("/:tenant_id", async (req, res) => {
   const { tenant_id } = req.params;
   const { room_id } = req.body;
-  console.log(tenant_id);
 
   if (room_id === undefined) {
     return res.status(400).json({ error: "room_id is required" });
@@ -232,6 +230,9 @@ router.delete("/:id", async (req, res) => {
       await client.query(
         `UPDATE ${schema}.rooms SET seat_occupied = 0, last_due_created_month = NULL, move_in_date = NULL WHERE room_id = $1`,
         [room_id]
+      );
+      await client.query(
+        `DELETE FROM ${schema}.dues where room_id = $1`, [room_id]
       );
     } else {
       // Otherwise, just decrement the seat_occupied

@@ -39,7 +39,6 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   const { id } = req.params;
   const { property_name, property_address } = req.body;
-  console.log(id)
   try {
     const result = await pool.query(
       'UPDATE my_schema.properties SET property_name = $1, property_address = $2 WHERE property_id = $3 RETURNING *',

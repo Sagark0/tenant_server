@@ -36,7 +36,6 @@ router.get("/room/:id", async(req, res) => {
 // POST a new room
 router.post("/", async (req, res) => {
   const { property_id, room_no, room_rent, room_capacity, electricity_reading } = req.body;
-  console.log("room details", req.body);
 
   try {
     let query = "INSERT INTO my_schema.rooms (property_id, room_no, room_rent, room_capacity";
@@ -65,7 +64,6 @@ router.post("/", async (req, res) => {
 // UPDATE a room
 router.put("/:id", async (req, res) => {
   const { id } = req.params;
-  console.log("room", req.body);
   const {
     property_id,
     room_no,
