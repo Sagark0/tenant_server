@@ -5,12 +5,14 @@ const morgan = require("morgan");
 require("dotenv").config();
 
 const app = express();
+
 app.use(
   morgan("combined", {
-    skip: skipLoggingForRoot,
+    skip: (req, res) => req.path === "/", // Skip logging for root path
   })
 );
-const port = 3000;
+
+const port = process.env.PORT || 3000;
 
 var admin = require("firebase-admin");
 
